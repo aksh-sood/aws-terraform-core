@@ -1,0 +1,10 @@
+.terraform
+.terraform.tfstate.lock.info
+terraform.tfstate
+terraform.tfstate.d
+terraform.tfstate.backup
+*.tfstate
+*.tfplan
+.backup
+.terraform.lock.hcl
+.claude

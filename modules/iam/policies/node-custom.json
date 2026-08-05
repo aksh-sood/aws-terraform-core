@@ -1,0 +1,201 @@
+{
+  "Version": "2012-10-17",
+  "Id": "62a58c24621ba31871e687aaa092cd3d",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "acm:ListCertificates",
+        "acm:DescribeCertificate",
+        "kinesis:PutRecord",
+        "firehose:PutRecord",
+        "apigateway:SetWebACL",
+        "arc-zonal-shift:ListManagedResources",
+        "arc-zonal-shift:ListZonalShifts",
+        "autoscaling:*",
+        "cloudwatch:*",
+        "eks:ListShards",
+        "cognito-idp:AssociateWebACL",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:DisassociateWebACL",
+        "cognito-idp:GetWebACLForResource",
+        "cognito-idp:ListResourcesForWebACL",
+        "cognito-idp:ListUsers",
+        "cognito-idp:DescribeUser",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminListGroupsForUser",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "kinesis:GetRecords",
+        "kinesis:GetShardIterator",
+        "kinesis:PutRecord",
+        "kinesis:DescribeStream",
+        "kinesis:ListStreams",
+        "kinesis:ListShards",
+        "kinesis:DescribeStreamSummary",
+        "ec2:*",
+        "ec2messages:AcknowledgeMessage",
+        "ec2messages:DeleteMessage",
+        "ec2messages:FailMessage",
+        "ec2messages:GetEndpoint",
+        "ec2messages:GetMessages",
+        "ec2messages:SendReply",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:DescribeImages",
+        "ecr:DescribeImageScanFindings",
+        "ecr:DescribeRepositories",
+        "ecr:GetAuthorizationToken",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:GetLifecyclePolicy",
+        "ecr:GetLifecyclePolicyPreview",
+        "ecr:GetRepositoryPolicy",
+        "ecr:ListImages",
+        "ecr:ListTagsForResource",
+        "eks-auth:AssumeRoleForPodIdentity",
+        "eks:DescribeCluster",
+        "elasticfilesystem:DescribeAccessPoints",
+        "elasticfilesystem:DescribeFileSystems",
+        "elasticfilesystem:DescribeMountTargets",
+        "elasticloadbalancing:*",
+        "logs:CreateLogDelivery",
+        "logs:DeleteLogDelivery",
+        "logs:DescribeLogGroups",
+        "logs:DescribeResourcePolicies",
+        "s3-object-lambda:*",
+        "s3:*",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:ListSecrets",
+        "secretsmanager:ListSecretVersionIds",
+        "sns:Publish",
+        "sns:ListTopics",
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sqs:AddPermission",
+        "sqs:CancelMessageMoveTask",
+        "sqs:CreateQueue",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListDeadLetterSourceQueues",
+        "sqs:ListMessageMoveTasks",
+        "sqs:ListQueueTags",
+        "sqs:ListQueues",
+        "sqs:PurgeQueue",
+        "sqs:ReceiveMessage",
+        "sqs:SendMessage",
+        "sqs:SetQueueAttributes",
+        "sqs:StartMessageMoveTask",
+        "sqs:TagQueue",
+        "sqs:UntagQueue",
+        "ssm:DescribeAssociation",
+        "ssm:DescribeDocument",
+        "ssm:GetDeployablePatchSnapshotForInstance",
+        "ssm:GetDocument",
+        "ssm:GetManifest",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:ListAssociations",
+        "ssm:ListInstanceAssociations",
+        "ssm:PutComplianceItems",
+        "ssm:PutConfigurePackageResult",
+        "ssm:PutInventory",
+        "ssm:UpdateAssociationStatus",
+        "ssm:UpdateInstanceAssociationStatus",
+        "ssm:UpdateInstanceInformation",
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+        "waf-regional:*",
+        "waf:*",
+        "wafv2:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": ["wafv2.amazonaws.com"]
+        }
+      },
+      "Action": "logs:PutResourcePolicy",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": "elasticfilesystem:DeleteAccessPoint",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
+        }
+      },
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "autoscaling.amazonaws.com",
+            "ec2scheduled.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "spot.amazonaws.com",
+            "spotfleet.amazonaws.com"
+          ]
+        }
+      },
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": "elasticfilesystem:CreateAccessPoint",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": "elasticfilesystem:TagResource",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "arc-zonal-shift:*",
+      "Resource": "arn:aws:elasticloadbalancing:*:*:loadbalancer/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:*:*:network-interface/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetBucketPolicy", "s3:PutBucketPolicy"],
+      "Resource": "arn:aws:s3:::aws-waf-logs-*"
+    }
+  ]
+}
