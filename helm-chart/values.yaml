@@ -49,7 +49,7 @@ image:
   registry: ""
   repository: hashicorp/http-echo
   # Empty falls back to Chart.appVersion.
-  tag: ""
+  tag: "latest"
   # Takes precedence over tag when set, e.g. "sha256:abc...". A digest makes the
   # rollout reproducible; a mutable tag does not.
   digest: ""

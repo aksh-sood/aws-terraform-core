@@ -77,18 +77,12 @@ allow list empty. Public access is a deliberate exception, not the default.
 
 ## State
 
-Both stacks keep state on disk out of the box, so a first run needs nothing but
-AWS credentials. For remote state, uncomment the block in `backend.tf` and:
-
-```bash
-terraform init -backend-config=backends/dev.hcl
-```
-
-Fill in the bucket in [aws/backends/dev.hcl](aws/backends/dev.hcl) and
-[kubernetes/backends/dev.hcl](kubernetes/backends/dev.hcl) first. The bucket is
-reached with the same credentials you already have, so this works locally as well
-as in CI. Locking is S3-native (`use_lockfile`), not DynamoDB, which is
-deprecated as of Terraform 1.11.
+Both stacks keep state on disk, so a local run needs nothing but AWS
+credentials. The S3 backend is commented out in [aws/backend.tf](aws/backend.tf)
+and [kubernetes/backend.tf](kubernetes/backend.tf); fill in the bucket and
+uncomment when the stacks move to shared state. They have to be remote before
+the outputs of one can be read as the inputs of the other through
+`terraform_remote_state`.
 
 ## Monitoring an application
 
@@ -105,28 +99,20 @@ local in [kubernetes/modules/monitoring/main.tf](kubernetes/modules/monitoring/m
 so they cannot drift. An application chart should read the labels from there
 rather than copy them.
 
-Grafana dashboards are ConfigMaps labelled `grafana_dashboard=1`, loaded by the
-chart's sidecar — drop a JSON file in
-[kubernetes/modules/monitoring/dashboards/](kubernetes/modules/monitoring/dashboards/)
-and it is picked up. This deliberately does not use Terraform's Grafana provider,
-which would need the public Grafana hostname to resolve before any dashboard
-could exist.
+Grafana dashboards are the JSON files in
+[modules/grafana-config/dashboards/](kubernetes/modules/monitoring/modules/grafana-config/dashboards/),
+applied through Terraform's Grafana provider. That provider talks to Grafana over
+its public hostname, so dashboards, the developer user and the CloudWatch
+datasource are only provisioned when `create_dns_records = true` — the same
+variable feeds `configure_grafana`. On the default path Grafana comes up with the
+chart's built-in dashboards only.
 
-Without DNS records, reach the UIs by port-forward:
+Reach the UIs by port-forward when there are no DNS records:
 
 ```bash
 kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80
 terraform -chdir=terraform/kubernetes output grafana_password
 ```
-
-## Container images
-
-`create_ecr_repositories` (default on) builds one repository per entry in
-`ecr_repository_names`, with scan-on-push, immutable tags, and a lifecycle policy
-that expires untagged images after 7 days and keeps the last 30. The node role
-already carries `AmazonEC2ContainerRegistryReadOnly`, so pulls need no further
-wiring. Set it to `false` if images are published elsewhere — and if you do, pin
-by digest rather than by tag.
 
 ## Known limitations
 

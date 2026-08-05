@@ -50,9 +50,10 @@ output "grafana_password" {
   sensitive   = true
 }
 
-output "monitoring_namespace" {
-  description = "Namespace the monitoring stack runs in"
-  value       = module.monitoring.namespace
+output "grafana_dev_password" {
+  description = "Grafana developer password. Null unless create_dns_records is true"
+  value       = module.monitoring.grafana_dev_password
+  sensitive   = true
 }
 
 # The application chart has to stamp these onto its ServiceMonitor — all of

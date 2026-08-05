@@ -235,3 +235,59 @@ variable "opensearch_password" {
   default     = ""
   sensitive   = true
 }
+
+# ----------------------------------------------------------------------------
+# Application — deployed from the chart in ../../helm-chart
+# ----------------------------------------------------------------------------
+
+variable "deploy_app" {
+  description = "Deploy the application from the in-repo helm chart. Also gates the CNAME published for it"
+  type        = bool
+  default     = true
+}
+
+variable "app_release_name" {
+  description = "Helm release name. Also the prefix of every object the chart creates"
+  type        = string
+  default     = "hello-world"
+}
+
+variable "app_namespace" {
+  description = "Namespace the release installs into. Created by the release itself"
+  type        = string
+  default     = "hello-world"
+}
+
+variable "app_host_prefix" {
+  description = "Published as <cluster_name>-<prefix>.<domain_name>, matching the platform's other hostnames"
+  type        = string
+  default     = "hello-world"
+}
+
+variable "app_replica_count" {
+  description = "Replicas. Three is the smallest count that survives losing one AZ with two left serving traffic"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.app_replica_count >= 1
+    error_message = "app_replica_count must be at least 1."
+  }
+}
+
+variable "app_image" {
+  description = "Image the service runs. The default serves a plain-text Hello World and needs no build step. An empty tag falls back to the chart's appVersion"
+  type = object({
+    repository = string
+    tag        = optional(string, "latest")
+  })
+  default = {
+    repository = "hashicorp/http-echo"
+  }
+}
+
+variable "app_values" {
+  description = "Extra chart values, merged over the wiring in main.tf. Anything in helm-chart/values.yaml is reachable here — note that replacing app_image also means clearing the chart's default args, which are http-echo flags"
+  type        = any
+  default     = {}
+}

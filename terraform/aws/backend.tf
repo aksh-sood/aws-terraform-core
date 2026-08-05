@@ -1,7 +1,9 @@
-# Left commented so a first run needs nothing but AWS credentials. To use remote
-# state, uncomment and run `terraform init -backend-config=backends/dev.hcl` —
-# the bucket is reached with the same credentials, so local runs keep working.
-
 # terraform {
-#   backend "s3" {}
+#   backend "s3" {
+#     bucket         = "my-terraform-state-bucket"
+#     key            = "terraform.tfstate"
+#     region         = "us-east-1"
+#     dynamodb_table = "terraform-state-lock"
+#     encrypt        = true
+#   }
 # }

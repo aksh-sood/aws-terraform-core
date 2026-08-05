@@ -28,26 +28,6 @@ grafana:
     size: ${grafana_volume_size}
   initChownData:
     enabled: false
-  # Loads any ConfigMap in the namespace labelled grafana_dashboard=1, which is
-  # how the dashboards in modules/monitoring/dashboards get in. No dependency on
-  # the Grafana API being reachable from wherever Terraform runs.
-  sidecar:
-    dashboards:
-      enabled: true
-      label: grafana_dashboard
-      labelValue: "1"
-      folderAnnotation: grafana_folder
-      provider:
-        foldersFromFilesStructure: true
-  additionalDataSources:
-    - name: CloudWatch
-      type: cloudwatch
-      # authType default means the pod's own credentials, which are then used to
-      # assume the role below.
-      jsonData:
-        authType: default
-        defaultRegion: ${aws_region}
-        assumeRoleArn: ${grafana_role_arn}
 additionalScrapeConfigs:
   - job_name: node-exporter-prometheus-node-exporter
     kubernetes_sd_configs:

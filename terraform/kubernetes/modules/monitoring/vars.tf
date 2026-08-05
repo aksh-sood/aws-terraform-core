@@ -167,6 +167,8 @@ variable "pagerduty_key" {}
 variable "grafana_role_arn" {}
 variable "environment" {}
 variable "domain_name" {}
+variable "configure_grafana" {}
 variable "node_exporter_version" {}
+variable "dependencies" {}
 variable "kube_state_metrics_version" {}
 
