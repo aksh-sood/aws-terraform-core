@@ -1,0 +1,68 @@
+# Every remaining knob set away from its default, including the ServiceMonitor
+# and the per-pod sidecar injection labels.
+fullnameOverride: api
+
+image:
+  repository: 111122223333.dkr.ecr.eu-west-1.amazonaws.com/storefront/api
+  tag: 1.4.2
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: regcred
+
+replicaCount: 4
+args: []
+containerPort: 9000
+healthPath: /healthz
+
+env:
+  LOG_LEVEL: debug
+envFrom:
+  - secretRef:
+      name: api-secrets
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    memory: 256Mi
+
+podAnnotations:
+  owner: platform@example.net
+podLabels:
+  sidecar.istio.io/inject: "true"
+  istio.io/rev: default
+
+nodeSelector:
+  kubernetes.io/arch: amd64
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: apps
+    effect: NoSchedule
+
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/storefront-api
+
+service:
+  port: 8080
+
+istio:
+  hosts:
+    - api.ci.example.net
+    - api-alt.ci.example.net
+  gateway:
+    enabled: true
+    selector:
+      istio: ingressgateway
+  virtualService:
+    enabled: true
+    prefix: /api
+    timeout: 5s
+
+metrics:
+  enabled: true
+  path: /internal/metrics

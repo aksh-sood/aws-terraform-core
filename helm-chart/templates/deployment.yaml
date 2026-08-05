@@ -3,25 +3,24 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "deploy-service.fullname" . }}
-  namespace: {{ include "deploy-service.namespace" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "deploy-service.labels" . | nindent 4 }}
-    {{- with .Values.deployment.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-  {{- with merge (deepCopy (.Values.deployment.annotations | default dict)) (deepCopy (.Values.commonAnnotations | default dict)) }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
-  minReadySeconds: {{ .Values.deployment.minReadySeconds }}
-  progressDeadlineSeconds: {{ .Values.deployment.progressDeadlineSeconds }}
-  {{- with .Values.deployment.strategy }}
+  # Enough history to roll back, without keeping every past revision.
+  revisionHistoryLimit: 3
+  # A pod that passes readiness and then immediately falls over does not count
+  # as a successful step in the rollout.
+  minReadySeconds: 5
+  progressDeadlineSeconds: 600
   strategy:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    type: RollingUpdate
+    rollingUpdate:
+      # Full capacity through a rollout: a replacement is Ready before an old
+      # pod goes away. Costs headroom for one extra pod.
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "deploy-service.selectorLabels" . | nindent 6 }}
@@ -29,13 +28,10 @@ spec:
     metadata:
       labels:
         {{- include "deploy-service.labels" . | nindent 8 }}
-        {{- with (include "deploy-service.istioPodLabels" .) }}
-        {{- . | nindent 8 }}
-        {{- end }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with merge (deepCopy (.Values.podAnnotations | default dict)) (deepCopy (.Values.commonAnnotations | default dict)) }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -45,85 +41,87 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "deploy-service.serviceAccountName" . }}
-      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
-      {{- with .Values.podSecurityContext }}
+      # The app makes no Kubernetes API calls, so no token is projected. An
+      # injected Istio sidecar is unaffected — it mounts its own istio-token.
+      automountServiceAccountToken: false
+      # Satisfies the restricted Pod Security Standard. uid 65532 is what the
+      # default image already runs as; change both together for another image.
+      # An injected sidecar sets its own context and is not affected by this.
       securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.priorityClassName }}
-      priorityClassName: {{ . }}
-      {{- end }}
-      {{- with .Values.schedulerName }}
-      schedulerName: {{ . }}
-      {{- end }}
-      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
-      {{- with .Values.initContainers }}
-      initContainers:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Time to finish in-flight requests after SIGTERM.
+      terminationGracePeriodSeconds: 30
       containers:
         - name: {{ include "deploy-service.name" . }}
           image: {{ include "deploy-service.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.command }}
-          command:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           {{- with .Values.args }}
           args:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
-            {{- toYaml .Values.containerPorts | nindent 12 }}
-          {{- if or .Values.env .Values.extraEnv }}
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          {{- with .Values.env }}
           env:
-            {{- range $name, $value := .Values.env }}
+            {{- range $name, $value := . }}
             - name: {{ $name }}
               value: {{ $value | quote }}
-            {{- end }}
-            {{- with .Values.extraEnv }}
-            {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
           {{- with .Values.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if .Values.probes.startup.enabled }}
+          # Startup absorbs a slow boot so liveness can stay tight afterwards.
+          # Readiness gates traffic; liveness only restarts a wedged process, so
+          # it is deliberately more forgiving than readiness.
           startupProbe:
-            {{- omit .Values.probes.startup "enabled" | toYaml | nindent 12 }}
-          {{- end }}
-          {{- if .Values.probes.readiness.enabled }}
+            httpGet:
+              path: {{ .Values.healthPath }}
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
           readinessProbe:
-            {{- omit .Values.probes.readiness "enabled" | toYaml | nindent 12 }}
-          {{- end }}
-          {{- if .Values.probes.liveness.enabled }}
+            httpGet:
+              path: {{ .Values.healthPath }}
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 3
           livenessProbe:
-            {{- omit .Values.probes.liveness "enabled" | toYaml | nindent 12 }}
-          {{- end }}
+            httpGet:
+              path: {{ .Values.healthPath }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.containerSecurityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.lifecycle }}
-          lifecycle:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.extraVolumeMounts }}
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # readOnlyRootFilesystem means a writable /tmp has to come from a
+          # volume.
           volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-        {{- with .Values.sidecars }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-      {{- with .Values.extraVolumes }}
+            - name: tmp
+              mountPath: /tmp
       volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -132,21 +130,28 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.topologySpreadConstraints }}
+      # Multi-AZ placement. DoNotSchedule on the zone key leaves a pod Pending
+      # rather than letting every replica land in one AZ — the failure mode a
+      # soft constraint hides until that AZ goes away. The cost is that uneven
+      # node capacity across zones caps the deployment; relax this one to
+      # ScheduleAnyway if that is the wrong trade.
+      #
+      # matchLabelKeys scopes the skew calculation to the ReplicaSet being
+      # rolled out, so a rollout is not blocked by pods of the old revision.
       topologySpreadConstraints:
-        {{- range $constraint := . }}
-        - {{ toYaml (omit $constraint "labelSelector") | nindent 10 | trim }}
-          {{- with $constraint.labelSelector }}
-          labelSelector:
-            {{- toYaml . | nindent 12 }}
-          {{- else }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          matchLabelKeys:
+            - pod-template-hash
           labelSelector:
             matchLabels:
-              {{- include "deploy-service.selectorLabels" $ | nindent 14 }}
-          {{- end }}
-        {{- end }}
-      {{- end }}
+              {{- include "deploy-service.selectorLabels" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          matchLabelKeys:
+            - pod-template-hash
+          labelSelector:
+            matchLabels:
+              {{- include "deploy-service.selectorLabels" . | nindent 14 }}

@@ -1,72 +1,39 @@
 {{- if .Values.istio.virtualService.enabled -}}
-{{- $vs := .Values.istio.virtualService -}}
-{{- $gateways := $vs.gateways | default list -}}
-{{- if not $gateways -}}
-  {{- if .Values.istio.gateway.enabled -}}
-    {{- /* Namespace-qualified: an unqualified name resolves in the gateway's
-           own namespace, not this one, which silently drops the route. */ -}}
-    {{- $gateways = append $gateways (printf "%s/%s" (include "deploy-service.namespace" .) (include "deploy-service.gatewayName" .)) -}}
-  {{- end -}}
-  {{- if $vs.includeMesh -}}
-    {{- $gateways = append $gateways "mesh" -}}
-  {{- end -}}
-{{- end -}}
-apiVersion: {{ .Values.istio.apiVersion }}
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
-  name: {{ include "deploy-service.virtualServiceName" . }}
-  namespace: {{ include "deploy-service.namespace" . }}
+  name: {{ include "deploy-service.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "deploy-service.labels" . | nindent 4 }}
-    {{- with $vs.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-  {{- with merge (deepCopy ($vs.annotations | default dict)) (deepCopy (.Values.commonAnnotations | default dict)) }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
 spec:
   hosts:
-    {{- include "deploy-service.virtualServiceHosts" . | nindent 4 }}
-  {{- with $gateways }}
+    {{- toYaml .Values.istio.hosts | nindent 4 }}
   gateways:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{- with $vs.exportTo }}
-  exportTo:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- if .Values.istio.gateway.enabled }}
+    # Namespace-qualified: an unqualified name resolves in the gateway's own
+    # namespace, not this one, which silently drops the route.
+    - {{ .Release.Namespace }}/{{ include "deploy-service.gatewayName" . }}
+    {{- end }}
+    # Serves the same hostnames to in-cluster callers, so clients do not need a
+    # different address than external ones.
+    - mesh
   http:
-    {{- if $vs.http }}
-    {{- toYaml $vs.http | nindent 4 }}
-    {{- else }}
     - match:
         - uri:
-            {{ $vs.route.matchType | default "prefix" }}: {{ $vs.route.match | default "/" | quote }}
+            prefix: {{ .Values.istio.virtualService.prefix | quote }}
       route:
         - destination:
             host: {{ include "deploy-service.serviceHost" . }}
             port:
-              number: {{ include "deploy-service.routePort" . }}
-          weight: 100
-      {{- with $vs.route.rewriteUri }}
-      rewrite:
-        uri: {{ . | quote }}
-      {{- end }}
-      {{- with $vs.route.timeout }}
-      timeout: {{ . }}
-      {{- end }}
-      {{- with $vs.route.retries }}
+              number: {{ .Values.service.port }}
+      timeout: {{ .Values.istio.virtualService.timeout }}
+      # Only conditions where the request provably never reached the app, so a
+      # retry is safe even for a non-idempotent handler. Adding 5xx or
+      # retriable-status-codes here would not be: a 500 from a handler that
+      # already committed a write would be replayed.
       retries:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $vs.route.corsPolicy }}
-      corsPolicy:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with $vs.route.headers }}
-      headers:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-    {{- end }}
+        attempts: 3
+        perTryTimeout: 3s
+        retryOn: connect-failure,refused-stream,gateway-error
 {{- end }}

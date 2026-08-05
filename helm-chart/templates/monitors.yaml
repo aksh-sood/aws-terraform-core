@@ -1,31 +1,29 @@
-{{- if .Values.metrics.serviceMonitor.enabled -}}
+{{- if .Values.metrics.enabled -}}
 {{- /*
-The labels on this object are what the Prometheus instance selects
-ServiceMonitors on (serviceMonitorSelector); the selector inside the spec is
-what picks up this chart's Service. Getting the first wrong means the target is
-never scraped and nothing reports an error.
+The two labels below are what the platform's Prometheus selects ServiceMonitors
+on (its serviceMonitorSelector). Get them wrong and the target is simply never
+scraped — nothing reports an error. The selector inside the spec is what picks
+up this chart's Service.
 */ -}}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "deploy-service.fullname" . }}
-  namespace: {{ default (include "deploy-service.namespace" .) .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "deploy-service.labels" . | nindent 4 }}
-    {{- with .Values.metrics.serviceMonitor.labels }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
-  {{- with .Values.commonAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    prometheus: prometheus-kube-prometheus-prometheus
+    release: prometheus
 spec:
   namespaceSelector:
     matchNames:
-      - {{ include "deploy-service.namespace" . }}
+      - {{ .Release.Namespace }}
   selector:
     matchLabels:
       {{- include "deploy-service.selectorLabels" . | nindent 6 }}
   endpoints:
-    {{- toYaml .Values.metrics.serviceMonitor.endpoints | nindent 4 }}
+    - port: http
+      path: {{ .Values.metrics.path }}
+      interval: 30s
+      scrapeTimeout: 10s
 {{- end }}

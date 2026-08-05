@@ -3,7 +3,7 @@ locals {
   # the platform's so it gets a DNS record on the same terms.
   cnames = toset(concat(
     ["prometheus", "grafana", "alertmanager", "jaeger"],
-    var.deploy_hello_world ? [var.app_host_prefix] : [],
+    var.deploy_app ? [var.app_host_prefix] : [],
   ))
 }
 
@@ -198,5 +198,5 @@ resource "helm_release" "app_release" {
   # Enabling the chart's ServiceMonitor through app_values additionally
   # needs the Prometheus Operator CRDs from modules/monitoring, which cannot be
   # ordered with depends_on — see the note on that module above.
-  depends_on = [module.istio,module.monitoring]
+  depends_on = [module.istio, module.monitoring]
 }

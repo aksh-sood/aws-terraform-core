@@ -1,0 +1,76 @@
+
+Report Summary
+
+┌────────────────────────────────────────────────────────────┬────────────┬───────────────────┐
+│                           Target                           │    Type    │ Misconfigurations │
+├────────────────────────────────────────────────────────────┼────────────┼───────────────────┤
+│ aws                                                        │ terraform  │         0         │
+├────────────────────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes                                                 │ terraform  │         0         │
+├────────────────────────────────────────────────────────────┼────────────┼───────────────────┤
+│ kubernetes/modules/monitoring/configs/virtualServices.yaml │ kubernetes │         0         │
+├────────────────────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform-aws-modules/eks/aws/main.tf                      │ terraform  │         1         │
+├────────────────────────────────────────────────────────────┼────────────┼───────────────────┤
+│ terraform-aws-modules/eks/aws/node_groups.tf               │ terraform  │         1         │
+└────────────────────────────────────────────────────────────┴────────────┴───────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+terraform-aws-modules/eks/aws/main.tf (terraform)
+=================================================
+Tests: 1 (SUCCESSES: 0, FAILURES: 1)
+Failures: 1 (MEDIUM: 0, HIGH: 1, CRITICAL: 0)
+
+AWS-0039 (HIGH): Cluster does not have secret encryption enabled.
+══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+EKS cluster resources should have the encryption_config block set with protection of the secrets resource.
+
+
+See https://avd.aquasec.com/misconfig/aws-0039
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ terraform-aws-modules/eks/aws/main.tf:36-214
+   via aws/modules/eks/main.tf:1-66 (module.eks)
+    via aws/main.tf:18-60 (module.eks)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  36 ┌ resource "aws_eks_cluster" "this" {
+  37 │   count = local.create ? 1 : 0
+  38 │ 
+  39 │   region = var.region
+  40 │ 
+  41 │   name                          = var.name
+  42 │   role_arn                      = local.role_arn
+  43 │   version                       = var.kubernetes_version
+  44 └   enabled_cluster_log_types     = var.enabled_log_types
+  ..   
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+terraform-aws-modules/eks/aws/node_groups.tf (terraform)
+========================================================
+Tests: 1 (SUCCESSES: 0, FAILURES: 1)
+Failures: 1 (MEDIUM: 0, HIGH: 0, CRITICAL: 1)
+
+AWS-0104 (CRITICAL): Security group rule allows unrestricted egress to any IP address.
+══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Opening up ports to connect out to the public internet is generally to be avoided. You should restrict access to IP addresses or ranges that are explicitly required where possible.
+
+
+See https://avd.aquasec.com/misconfig/aws-0104
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ terraform-aws-modules/eks/aws/node_groups.tf:216
+   via terraform-aws-modules/eks/aws/node_groups.tf:201-221 (aws_security_group_rule.node["egress_all"])
+    via aws/modules/eks/main.tf:1-66 (module.eks)
+     via aws/main.tf:18-60 (module.eks)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 201   resource "aws_security_group_rule" "node" {
+ ...   
+ 216 [   cidr_blocks              = try(each.value.cidr_blocks, null)
+ ...   
+ 221   }
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
