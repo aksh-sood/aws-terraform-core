@@ -1,0 +1,30 @@
+# Declare variables to be passed into your templates.
+image:
+  registry: quay.io
+  repository: prometheus/node-exporter
+  tag: v${image_version}
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 180Mi
+  equests:
+    cpu: 102m
+    memory: 180Mi
+
+## Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  clusterIP: ""
+  port: 9101
+  servicePort: ""
+  targetPort: https
+  portName: https
+  nodePort: null
+  listenOnAllInterfaces: true
+
+  ## Additional annotations and labels for the service
+  annotations:
+    prometheus.io/scrape: "true"

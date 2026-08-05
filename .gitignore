@@ -6,5 +6,9 @@ terraform.tfstate.backup
 *.tfstate
 *.tfplan
 .backup
-.terraform.lock.hcl
 .claude
+
+# Real variable values. The *.tfvars.example files are committed; the filled-in
+# copies hold account ids, subnet ids and webhook secrets.
+*.tfvars
+*.auto.tfvars.json

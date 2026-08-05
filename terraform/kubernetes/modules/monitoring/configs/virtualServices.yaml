@@ -1,0 +1,62 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  gateways:
+  - monitoring-gateway
+  - mesh
+  hosts:
+  - ${environment}-grafana.${domain_name}
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: prometheus-grafana
+        port:
+          number: 80
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  gateways:
+  - monitoring-gateway
+  - mesh
+  hosts:
+  - ${environment}-prometheus.${domain_name}
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: prometheus-kube-prometheus-prometheus
+        port:
+          number: 9090
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  gateways:
+  - monitoring-gateway
+  - mesh
+  hosts:
+  - ${environment}-alertmanager.${domain_name}
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: prometheus-kube-prometheus-alertmanager
+        port:
+          number: 9093

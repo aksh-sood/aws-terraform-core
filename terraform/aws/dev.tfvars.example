@@ -1,0 +1,29 @@
+# cp dev.tfvars.example dev.tfvars, fill in, then
+#   terraform apply -var-file=dev.tfvars
+
+region       = "us-east-1"
+cluster_name = "lucidity-dev"
+
+# The VPC is a prerequisite. Both subnet lists must span at least
+# minimum_availability_zones zones, and must carry the load balancer controller
+# discovery tags — see validations.tf.
+vpc_id             = "vpc-REPLACE"
+private_subnet_ids = ["subnet-REPLACE-a", "subnet-REPLACE-b", "subnet-REPLACE-c"]
+public_subnet_ids  = ["subnet-REPLACE-d", "subnet-REPLACE-e", "subnet-REPLACE-f"]
+
+# Private API endpoint is the default. Turning the public one on requires an
+# allow list; "0.0.0.0/0" defeats the point.
+endpoint_private_access = true
+endpoint_public_access  = false
+# public_access_cidrs   = ["203.0.113.4/32"]
+
+# Envelope encryption for Kubernetes secrets. Leave unset to skip it.
+# kms_key_arn = "arn:aws:kms:us-east-1:111122223333:key/REPLACE"
+
+ecr_repository_names = ["hello-world"]
+
+tags = {
+  Environment = "dev"
+  ManagedBy   = "terraform"
+  Owner       = "REPLACE"
+}

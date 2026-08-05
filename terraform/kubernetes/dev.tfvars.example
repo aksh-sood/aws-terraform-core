@@ -1,0 +1,33 @@
+# cp dev.tfvars.example dev.tfvars, fill in, then
+#   terraform apply -var-file=dev.tfvars
+#
+# The five values produced by the aws stack — region, cluster_name,
+# cluster_endpoint, cluster_certificate_authority_data, grafana_role_arn — are
+# not listed here. They arrive through aws.auto.tfvars.json:
+#
+#   terraform -chdir=../aws output -json | jq 'map_values(.value)' \
+#     > aws.auto.tfvars.json
+
+# Infrastructure outside this repository.
+domain_name                 = "REPLACE.example.com"
+acm_certificate_arn         = "arn:aws:acm:us-east-1:111122223333:certificate/REPLACE"
+elb_security_group          = "sg-REPLACE"
+internal_alb_security_group = "sg-REPLACE"
+
+# Route53 records for <cluster_name>-{prometheus,grafana,alertmanager,jaeger}.
+# Off by default; the UIs are reachable by port-forward without them.
+create_dns_records = false
+# route53_zone_id  = "REPLACE"
+
+enable_ebs_persistent_storage = true
+# efs_id                      = "fs-REPLACE"   # required when the above is false
+
+# Optional stacks.
+enable_alb_logs   = false
+create_opensearch = false
+
+# Alerting. Both secrets are sensitive; prefer TF_VAR_ environment variables or
+# a secrets manager over a file on disk.
+# slack_channel_name = "#alerts-dev"
+# slack_web_hook     = "REPLACE"
+# pagerduty_key      = "REPLACE"

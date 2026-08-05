@@ -1,0 +1,53 @@
+daemonset:
+  filebeatConfig:
+    filebeat.yml: |
+      setup.ilm.enabled: false
+      filebeat.autodiscover:
+        providers:
+           - type: kubernetes
+             include_pod_uid: true
+             templates:
+               - condition.regexp:
+                   kubernetes.container.name: '.+'
+                 config:
+                 - type: container
+                   paths:
+                   - /var/log/pods/*$${data.kubernetes.pod.uid}/$${data.kubernetes.container.name}/*.log
+      output.elasticsearch:
+        hosts: ["https://aws-es:443"]
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+        ssl.verification_mode: none
+
+  securityContext:
+    runAsUser: 0
+    privileged: false
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "100Mi"
+    limits:
+      cpu: "1000m"
+      memory: "200Mi"
+  tolerations: []
+
+image: "docker.elastic.co/beats/filebeat-oss:latest"
+imageTag: "multiarch-latest"
+imagePullPolicy: "IfNotPresent"
+imagePullSecrets: []
+
+livenessProbe:
+  exec:
+    command:
+      - sh
+      - -c
+      - |
+        #!/usr/bin/env bash -e
+        curl --fail 127.0.0.1:5066
+  failureThreshold: 3
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+# Whether this chart should self-manage its service account, role, and associated role binding.
+managedServiceAccount: true

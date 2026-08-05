@@ -1,0 +1,61 @@
+additionalPrometheusRulesMap: ${alerts}
+alertmanager: ${alertmanager}
+prometheus:
+  prometheusSpec:
+    # Rendered from local.service_monitor_labels and published as the
+    # service_monitor_labels output. An application ServiceMonitor has to carry
+    # all of these to be scraped.
+    serviceMonitorSelector:
+      matchLabels: ${service_monitor_labels}
+    serviceMonitorNamespaceSelector: {}
+    retention: 90d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: "${prometheus_storage_class}"
+          accessModes:
+            - ${prometheus_access_mode}
+          resources:
+            requests:
+              storage: ${prometheus_volume_size}
+grafana:
+  adminPassword: ${grafana_password}
+  persistence:
+    enabled: true
+    storageClassName: "${prometheus_storage_class}"
+    accessModes:
+      - ${prometheus_access_mode}
+    size: ${grafana_volume_size}
+  initChownData:
+    enabled: false
+  # Loads any ConfigMap in the namespace labelled grafana_dashboard=1, which is
+  # how the dashboards in modules/monitoring/dashboards get in. No dependency on
+  # the Grafana API being reachable from wherever Terraform runs.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+  additionalDataSources:
+    - name: CloudWatch
+      type: cloudwatch
+      # authType default means the pod's own credentials, which are then used to
+      # assume the role below.
+      jsonData:
+        authType: default
+        defaultRegion: ${aws_region}
+        assumeRoleArn: ${grafana_role_arn}
+additionalScrapeConfigs:
+  - job_name: node-exporter-prometheus-node-exporter
+    kubernetes_sd_configs:
+      - role: endpoints
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_endpoints_name]
+        regex: "node-exporter-prometheus-node-exporter"
+        action: keep
+  - job_name: "kube-state-metrics"
+    static_configs:
+      - targets: ["kube-state-metrics.kube-system.svc.cluster.local:8080"]
