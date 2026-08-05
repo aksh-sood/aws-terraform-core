@@ -23,7 +23,7 @@ imagePullSecrets: []
 
 # Three or more spreads across availability zones; see the topology spread
 # constraints in templates/deployment.yaml.
-replicaCount: 1
+replicaCount: 3
 
 # Appended to the image ENTRYPOINT. These are http-echo's flags — clear them
 # when you point image at your own service.
@@ -104,9 +104,10 @@ istio:
     # An outer bound on a request. Istio's own default is no timeout at all.
     timeout: 15s
 
-# Scrape target for the platform's Prometheus. Off by default: a target that
-# 404s is worse than none, so enable it once the app serves metrics on the
-# port above.
+# Scrape target for the platform's Prometheus, on the container port above.
+# The app has to actually serve Prometheus metrics at this path — the default
+# http-echo image answers every path with its echo text, which Prometheus
+# cannot parse, so set enabled: false while that image is in use.
 metrics:
-  enabled: false
+  enabled: true
   path: /metrics

@@ -291,3 +291,9 @@ variable "app_values" {
   type        = any
   default     = {}
 }
+
+variable "helm_chart_path" {
+  description = "Path to the application chart. Null uses the copy in this repository, reached relative to this module. Set it when terraform runs from a copied source tree, as it does under terragrunt, where the relative path cannot reach the repository root."
+  type        = string
+  default     = null
+}

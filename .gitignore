@@ -12,3 +12,5 @@ terraform.tfstate.backup
 # copies hold account ids, subnet ids and webhook secrets.
 *.tfvars
 *.auto.tfvars.json
+pipeline
+.github

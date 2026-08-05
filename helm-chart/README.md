@@ -21,7 +21,7 @@ why](#what-is-fixed-and-why) lists all of it.
 | `Gateway` (Istio) | [gateway.yaml](templates/gateway.yaml) | `istio.gateway.enabled` |
 | `VirtualService` (Istio) | [virtualservice.yaml](templates/virtualservice.yaml) | `istio.virtualService.enabled` |
 | `ServiceAccount` | [serviceaccount.yaml](templates/serviceaccount.yaml) | `serviceAccount.create` |
-| `ServiceMonitor` | [monitors.yaml](templates/monitors.yaml) | `metrics.enabled` (off by default) |
+| `ServiceMonitor` | [monitors.yaml](templates/monitors.yaml) | `metrics.enabled` |
 
 ## Requirements
 
@@ -116,7 +116,7 @@ That is the whole list. `values.yaml` carries a comment per field.
 | `image.tag` | `latest` | Empty falls back to `Chart.appVersion` |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | |
-| `replicaCount` | `1` | 3+ to actually spread across AZs |
+| `replicaCount` | `3` | Smallest count that survives losing one AZ with two left serving |
 | `args` | http-echo flags | Appended to the image ENTRYPOINT. Clear when changing `image` |
 | `containerPort` | `8080` | Named `http` everywhere downstream |
 | `env` | `{}` | Name/value pairs |
@@ -135,8 +135,15 @@ That is the whole list. `values.yaml` carries a comment per field.
 | `istio.virtualService.enabled` | `true` | |
 | `istio.virtualService.prefix` | `/` | URI prefix match |
 | `istio.virtualService.timeout` | `15s` | Istio's own default is no timeout |
-| `metrics.enabled` | `false` | Turn on once the app serves metrics |
+| `metrics.enabled` | `true` | Set false unless the app serves Prometheus metrics — see below |
 | `metrics.path` | `/metrics` | Scraped on the `http` port |
+
+The ServiceMonitor is on by default, so **the app must serve Prometheus metrics
+at `metrics.path`**. The default `hashicorp/http-echo` image does not: it answers
+every path with its echo text, so Prometheus scrapes `Hello World`, fails to
+parse it, and the target shows as down. Either set `metrics.enabled: false`
+alongside the default image, or point `image` at a service that exposes
+`/metrics`.
 
 ## What is fixed, and why
 

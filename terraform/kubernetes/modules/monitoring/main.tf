@@ -75,23 +75,6 @@ resource "helm_release" "kube_prometheus_stack" {
   depends_on = [var.efs_depends_on, var.ebs_depends_on, var.dependencies]
 }
 
-resource "helm_release" "prometheus_node_exporter" {
-  name       = "node-exporter"
-  count      = 0
-  repository = "https://prometheus-community.github.io/helm-charts"
-  chart      = "prometheus-node-exporter"
-  namespace  = "monitoring"
-  values = [
-    templatefile("${path.module}/configs/nodeExporter.yaml", {
-      image_version = var.node_exporter_version
-    })
-  ]
-  cleanup_on_fail = true
-
-  depends_on = [helm_release.kube_prometheus_stack]
-}
-
-
 resource "helm_release" "kube_state_metrics" {
   count      = 0
   name       = "kube-state-metrics"

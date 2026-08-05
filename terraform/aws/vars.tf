@@ -222,45 +222,6 @@ variable "additional_node_inline_policy" {
   default     = null
 }
 
-# ECR — the registry the cluster pulls application images from. Turn this off if
-# images are published somewhere else; the node role already carries
-# AmazonEC2ContainerRegistryReadOnly, so pulls need no further wiring.
-variable "create_ecr_repositories" {
-  description = "Create the application image repositories"
-  type        = bool
-  default     = true
-}
-
-variable "ecr_repository_names" {
-  description = "Repositories to create, one per application image. Named <cluster_name>/<entry>"
-  type        = list(string)
-  default     = ["hello-world"]
-}
-
-variable "ecr_image_tag_mutability" {
-  description = "MUTABLE or IMMUTABLE. Immutable tags keep a deployed tag pointing at the image that was tested"
-  type        = string
-  default     = "IMMUTABLE"
-}
-
-variable "ecr_untagged_image_expiry_days" {
-  description = "Days an untagged image survives before the lifecycle policy expires it"
-  type        = number
-  default     = 7
-}
-
-variable "ecr_max_image_count" {
-  description = "Images kept per repository"
-  type        = number
-  default     = 30
-}
-
-variable "ecr_force_delete" {
-  description = "Allow terraform destroy to remove repositories that still hold images"
-  type        = bool
-  default     = false
-}
-
 variable "grafana_policies" {
   description = "Policy ARNs attached to the Grafana CloudWatch role"
   type        = list(string)

@@ -168,7 +168,7 @@ resource "helm_release" "app_release" {
   count = var.deploy_app ? 1 : 0
 
   name             = var.app_release_name
-  chart            = "${path.module}/../../helm-chart"
+  chart            = coalesce(var.helm_chart_path, "${path.module}/../../helm-chart")
   namespace        = var.app_namespace
   create_namespace = true
 
