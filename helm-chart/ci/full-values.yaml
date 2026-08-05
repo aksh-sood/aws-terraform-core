@@ -1,0 +1,244 @@
+# Exercises the pass-through paths: digest pinning, TLS termination at the
+# gateway, a raw multi-route http block, sidecars, volumes and scheduling.
+nameOverride: api
+fullnameOverride: ""
+component: api
+partOf: storefront
+
+commonLabels:
+  team: platform
+commonAnnotations:
+  owner: platform@example.net
+
+replicaCount: 4
+
+image:
+  registry: 111122223333.dkr.ecr.eu-west-1.amazonaws.com
+  repository: storefront/api
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: regcred
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::111122223333:role/storefront-api
+
+env:
+  LOG_LEVEL: debug
+extraEnv:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+envFrom:
+  - secretRef:
+      name: api-secrets
+
+containerPorts:
+  - name: http
+    containerPort: 8080
+    protocol: TCP
+  - name: http-metrics
+    containerPort: 9090
+    protocol: TCP
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    memory: 256Mi
+
+lifecycle:
+  preStop:
+    sleep:
+      seconds: 5
+
+probes:
+  startup:
+    enabled: true
+    httpGet:
+      path: /healthz
+      port: http
+    periodSeconds: 2
+    failureThreshold: 45
+  readiness:
+    enabled: true
+    httpGet:
+      path: /readyz
+      port: http
+    periodSeconds: 5
+  liveness:
+    enabled: true
+    httpGet:
+      path: /healthz
+      port: http
+    periodSeconds: 10
+
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+  - name: cache
+    emptyDir:
+      sizeLimit: 256Mi
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+  - name: cache
+    mountPath: /var/cache/api
+
+initContainers:
+  - name: wait-for-db
+    image: busybox:1.37
+    command: ["sh", "-c", "until nc -z db 5432; do sleep 1; done"]
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+
+sidecars:
+  - name: log-shipper
+    image: busybox:1.37
+    command: ["sh", "-c", "sleep infinity"]
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 32Mi
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+
+priorityClassName: high-priority
+schedulerName: default-scheduler
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    matchLabelKeys:
+      - pod-template-hash
+  # An explicit labelSelector is kept as given rather than injected.
+  - maxSkew: 2
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        team: platform
+
+nodeSelector:
+  kubernetes.io/arch: amd64
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: apps
+    effect: NoSchedule
+
+service:
+  type: ClusterIP
+  annotations:
+    example.net/description: api
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  internalTrafficPolicy: Cluster
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+      appProtocol: http
+    - name: http-metrics
+      port: 9090
+      targetPort: http-metrics
+      protocol: TCP
+
+istio:
+  sidecarInject: "true"
+  revision: default
+  hosts:
+    - api.ci.example.net
+  gateway:
+    name: shared-api-gateway
+    labels:
+      tier: edge
+    selector:
+      istio: ingressgateway
+    servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+        tls:
+          httpsRedirect: true
+      - port:
+          number: 443
+          name: https
+          protocol: HTTPS
+        tls:
+          mode: SIMPLE
+          credentialName: api-tls
+      # Per-server host override, rather than the shared istio.hosts.
+      - port:
+          number: 8443
+          name: https-admin
+          protocol: HTTPS
+        hosts:
+          - admin.ci.example.net
+        tls:
+          mode: SIMPLE
+          credentialName: admin-tls
+  virtualService:
+    exportTo:
+      - "."
+    # Raw routes: everything under `route` is ignored.
+    http:
+      - name: canary
+        match:
+          - headers:
+              x-canary:
+                exact: "true"
+        route:
+          - destination:
+              host: api.apps.svc.cluster.local
+              port:
+                number: 80
+            weight: 100
+        timeout: 5s
+      - name: default
+        route:
+          - destination:
+              host: api.apps.svc.cluster.local
+              port:
+                number: 80
+            weight: 100
+        retries:
+          attempts: 2
+          perTryTimeout: 2s
+          retryOn: connect-failure,refused-stream
+        corsPolicy:
+          allowOrigins:
+            - exact: https://app.example.net
+          allowMethods:
+            - GET
+            - POST
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    endpoints:
+      - port: http-metrics
+        path: /metrics
+        interval: 15s
+        scrapeTimeout: 10s

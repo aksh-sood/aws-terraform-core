@@ -1,0 +1,18 @@
+# Hostnames derived from a base domain instead of listed, and the ServiceMonitor
+# turned on. Also exercises namespaceOverride and the legacy label set.
+namespaceOverride: apps
+legacyLabels:
+  enabled: true
+
+istio:
+  hosts: []
+  domain: ci.example.net
+  hostPrefixes:
+    - hello
+    - hello-canary
+  sidecarInject: "true"
+  revision: default
+
+metrics:
+  serviceMonitor:
+    enabled: true

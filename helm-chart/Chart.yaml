@@ -1,0 +1,30 @@
+# apiVersion v2 is the Helm 3 chart format. v1 is Helm 2 era: it silently
+# ignores `dependencies` and is what `helm lint` flags first.
+apiVersion: v2
+name: deploy-service
+description: Deploys an HTTP microservice and exposes it through an Istio ingress gateway
+
+# Carries its own workload rather than a collection of subcharts.
+type: application
+
+# version    — the chart's own version. Bump on every template or values change.
+# appVersion — default application version, used as the image tag when
+#              image.tag is left empty.
+version: 0.1.0
+appVersion: "1.0.0"
+
+# networking.istio.io/v1 requires Istio >= 1.22.
+# topologySpreadConstraints.matchLabelKeys is honoured from 1.27 — older API
+# servers prune the field rather than reject it, so this floor is a soft one.
+kubeVersion: ">=1.27.0-0"
+
+keywords:
+  - microservice
+  - istio
+  - service-mesh
+
+maintainers:
+  - name: Platform Engineering
+
+annotations:
+  category: ApplicationServer

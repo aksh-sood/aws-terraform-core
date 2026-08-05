@@ -1,0 +1,35 @@
+{{- if .Values.istio.gateway.enabled -}}
+{{- /*
+The Gateway only configures listeners on the shared ingress gateway deployment
+selected below — it does not create one. The deployment must already exist and
+carry matching labels, otherwise this object is accepted and simply never
+programmes anything.
+*/ -}}
+apiVersion: {{ .Values.istio.apiVersion }}
+kind: Gateway
+metadata:
+  name: {{ include "deploy-service.gatewayName" . }}
+  namespace: {{ include "deploy-service.namespace" . }}
+  labels:
+    {{- include "deploy-service.labels" . | nindent 4 }}
+    {{- with .Values.istio.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with merge (deepCopy (.Values.istio.gateway.annotations | default dict)) (deepCopy (.Values.commonAnnotations | default dict)) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    {{- toYaml .Values.istio.gateway.selector | nindent 4 }}
+  servers:
+    {{- range $server := .Values.istio.gateway.servers }}
+    - {{ toYaml (omit $server "hosts") | nindent 6 | trim }}
+      hosts:
+        {{- if $server.hosts }}
+        {{- toYaml $server.hosts | nindent 8 }}
+        {{- else }}
+        {{- include "deploy-service.hosts" $ | nindent 8 }}
+        {{- end }}
+    {{- end }}
+{{- end }}

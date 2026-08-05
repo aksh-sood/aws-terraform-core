@@ -1,0 +1,55 @@
+{{ .Chart.Name }}/{{ .Chart.Version }} deployed as {{ .Release.Name }} in namespace {{ include "deploy-service.namespace" . }}.
+
+Image:    {{ include "deploy-service.image" . }}
+Replicas: {{ .Values.replicaCount }}
+
+Watch the rollout:
+
+  kubectl -n {{ include "deploy-service.namespace" . }} rollout status deployment/{{ include "deploy-service.fullname" . }}
+
+{{- if .Values.service.enabled }}
+
+Reach it from inside the cluster:
+
+  kubectl -n {{ include "deploy-service.namespace" . }} run curl --rm -it --image=curlimages/curl:8.11.1 --restart=Never -- \
+    curl -s http://{{ include "deploy-service.serviceHost" . }}:{{ include "deploy-service.routePort" . }}{{ .Values.istio.virtualService.route.match | default "/" }}
+
+Or port-forward:
+
+  kubectl -n {{ include "deploy-service.namespace" . }} port-forward svc/{{ include "deploy-service.fullname" . }} 8080:{{ include "deploy-service.routePort" . }}
+  curl http://127.0.0.1:8080/
+{{- end }}
+
+{{- if .Values.istio.virtualService.enabled }}
+{{- $hosts := include "deploy-service.virtualServiceHosts" . | fromYamlArray }}
+
+Reachable through the mesh on:
+{{- range $hosts }}
+  https://{{ . }}{{ $.Values.istio.virtualService.route.match | default "/" }}
+{{- end }}
+
+Each hostname needs a DNS record pointing at the ingress load balancer, and the
+gateway matched by selector {{ .Values.istio.gateway.selector | toJson }} must already exist.
+{{- range $hosts }}
+{{- if or (contains "example.com" .) (contains ".local" .) }}
+
+  WARNING: {{ . }} is the chart's placeholder hostname. Set istio.hosts (or
+  istio.domain) to a hostname you actually control, otherwise the route will
+  never receive traffic.
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- if not .Values.istio.sidecarInject }}
+
+Sidecar injection is left to the namespace label. Confirm the namespace opts in,
+or set istio.sidecarInject="true" and istio.revision to force it per workload:
+
+  kubectl get namespace {{ include "deploy-service.namespace" . }} --show-labels
+{{- end }}
+
+{{- if not .Values.metrics.serviceMonitor.enabled }}
+
+Prometheus is not scraping this release. Once the app serves metrics, enable it
+with --set metrics.serviceMonitor.enabled=true.
+{{- end }}

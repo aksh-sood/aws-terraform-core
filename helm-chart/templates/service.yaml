@@ -1,0 +1,61 @@
+{{- if .Values.service.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "deploy-service.fullname" . }}
+  namespace: {{ include "deploy-service.namespace" . }}
+  labels:
+    {{- include "deploy-service.labels" . | nindent 4 }}
+    {{- with .Values.service.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with merge (deepCopy (.Values.service.annotations | default dict)) (deepCopy (.Values.commonAnnotations | default dict)) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- with .Values.service.clusterIP }}
+  clusterIP: {{ . }}
+  {{- end }}
+  {{- with .Values.service.ipFamilyPolicy }}
+  ipFamilyPolicy: {{ . }}
+  {{- end }}
+  {{- with .Values.service.ipFamilies }}
+  ipFamilies:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  sessionAffinity: {{ .Values.service.sessionAffinity }}
+  {{- with .Values.service.sessionAffinityConfig }}
+  sessionAffinityConfig:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.service.internalTrafficPolicy }}
+  internalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- if .Values.service.publishNotReadyAddresses }}
+  publishNotReadyAddresses: true
+  {{- end }}
+  {{- if and .Values.service.externalTrafficPolicy (ne .Values.service.type "ClusterIP") }}
+  externalTrafficPolicy: {{ .Values.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- if and .Values.service.loadBalancerSourceRanges (eq .Values.service.type "LoadBalancer") }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  ports:
+    {{- range $port := .Values.service.ports }}
+    - name: {{ $port.name }}
+      port: {{ $port.port }}
+      targetPort: {{ $port.targetPort | default $port.name }}
+      protocol: {{ $port.protocol | default "TCP" }}
+      {{- with $port.appProtocol }}
+      appProtocol: {{ . }}
+      {{- end }}
+      {{- if and $port.nodePort (or (eq $.Values.service.type "NodePort") (eq $.Values.service.type "LoadBalancer")) }}
+      nodePort: {{ $port.nodePort }}
+      {{- end }}
+    {{- end }}
+  selector:
+    {{- include "deploy-service.selectorLabels" . | nindent 4 }}
+{{- end }}

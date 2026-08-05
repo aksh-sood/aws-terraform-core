@@ -1,0 +1,5 @@
+# Chart defaults, with a real hostname so the placeholder warning is not part of
+# the golden output. Renders every object except the ServiceMonitor.
+istio:
+  hosts:
+    - hello.ci.example.net

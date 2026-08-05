@@ -1,0 +1,410 @@
+# -----------------------------------------------------------------------------
+# deploy-service
+#
+# The defaults deploy a working "Hello World" HTTP service with no extra values,
+# but nothing here is app-specific: point image/args/probes at another HTTP
+# service and the chart is reusable as-is.
+#
+# Every object can be switched off, renamed, annotated and extended. Where a
+# field maps onto a Kubernetes or Istio API field it is passed through verbatim
+# rather than re-modelled, so anything those APIs accept is reachable from
+# values without touching a template.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Naming and metadata applied to every object
+# -----------------------------------------------------------------------------
+
+# Override the chart name used in object names and app.kubernetes.io/name.
+nameOverride: ""
+# Replace the generated "<release>-<chart>" object name outright.
+fullnameOverride: ""
+# Render into a namespace other than the release namespace. The namespace
+# itself is not created by this chart.
+namespaceOverride: ""
+# Suffix of in-cluster DNS names, used to build the VirtualService destination.
+clusterDomain: cluster.local
+
+# app.kubernetes.io/component and part-of. part-of defaults to the chart name.
+component: server
+partOf: ""
+
+# Merged into the labels/annotations of every object the chart renders.
+commonLabels: {}
+commonAnnotations: {}
+
+# Also emit the pre-app.kubernetes.io "app" and "application" labels. Enable
+# only for tooling that still selects on them — the chart's own selectors never
+# do, so flipping this is safe on a live release.
+legacyLabels:
+  enabled: false
+
+# -----------------------------------------------------------------------------
+# Image
+# -----------------------------------------------------------------------------
+
+image:
+  # Optional registry prefix, e.g. an ECR host. Kept separate from repository so
+  # one values file can be retargeted per environment.
+  registry: ""
+  repository: hashicorp/http-echo
+  # Empty falls back to Chart.appVersion.
+  tag: ""
+  # Takes precedence over tag when set, e.g. "sha256:abc...". A digest makes the
+  # rollout reproducible; a mutable tag does not.
+  digest: ""
+  # IfNotPresent avoids a registry round trip on every pod start. Use Always
+  # only for mutable tags such as "latest".
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+# - name: regcred
+
+# -----------------------------------------------------------------------------
+# Workload
+#
+# Three replicas is the smallest count that survives losing one AZ and still
+# has two left serving traffic.
+# -----------------------------------------------------------------------------
+
+replicaCount: 1
+
+deployment:
+  annotations: {}
+  labels: {}
+  # Enough ReplicaSets to roll back, without keeping every past revision.
+  revisionHistoryLimit: 3
+  # Stops a pod that passes readiness and then immediately falls over from
+  # counting as a successful step in the rollout.
+  minReadySeconds: 5
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxUnavailable 0 holds full capacity through a rollout: a replacement is
+      # Ready before an old pod goes away. Needs headroom for one extra pod.
+      maxUnavailable: 0
+      maxSurge: 1
+
+podAnnotations: {}
+podLabels: {}
+
+# Time the pod gets to finish in-flight requests after SIGTERM.
+terminationGracePeriodSeconds: 30
+priorityClassName: ""
+schedulerName: ""
+
+serviceAccount:
+  # A dedicated ServiceAccount per workload leaves the namespace default unused
+  # and gives IRSA / Workload Identity something to bind to.
+  create: true
+  # Empty uses the generated name.
+  name: ""
+  # e.g. eks.amazonaws.com/role-arn for IRSA.
+  annotations: {}
+  # The app does not call the Kubernetes API, so no token is projected. An
+  # injected Istio sidecar is unaffected — it mounts its own istio-token volume.
+  automountServiceAccountToken: false
+
+# Entrypoint overrides. command replaces the image ENTRYPOINT, args its CMD.
+command: []
+args:
+  - -listen=:8080
+  - -text=Hello World
+
+# Simple name/value pairs.
+env: {}
+#  LOG_LEVEL: info
+
+# Raw env entries, for valueFrom (secrets, configmaps, field refs).
+extraEnv: []
+# - name: POD_IP
+#   valueFrom:
+#     fieldRef:
+#       fieldPath: status.podIP
+
+envFrom: []
+# - configMapRef:
+#     name: app-config
+
+# Passed through verbatim. These port names are referenced by the Service's
+# targetPort and by the probes below, so keep them in step.
+containerPorts:
+  - name: http
+    containerPort: 8080
+    protocol: TCP
+
+# A CPU request with no CPU limit lets the container burst into idle capacity
+# instead of being throttled, while the request still guarantees a floor and
+# drives scheduling. Memory is request == limit: memory is not compressible, so
+# a limit above the request only defers the OOM kill and costs predictability.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 64Mi
+
+# Pod-level context. Applies to any container that does not set its own, so an
+# injected Istio sidecar (which does) is unaffected.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level context, stated again so the app container is explicit
+# regardless of the pod-level default.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  # Writable paths must then come from a mounted volume — see extraVolumes.
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# Each probe is passed through as-is minus `enabled`, so httpGet, tcpSocket,
+# grpc or exec all work, as does any timing field the API accepts.
+#
+# The default image answers every path, hence "/". Point these at a real health
+# endpoint for a real service, and keep readiness and liveness distinct:
+# readiness should fail while a dependency is down, liveness should not — a
+# liveness probe that fails on a dependency outage turns it into a restart loop.
+probes:
+  # Absorbs a slow start so liveness can stay tight afterwards.
+  startup:
+    enabled: true
+    httpGet:
+      path: /
+      port: http
+    periodSeconds: 2
+    timeoutSeconds: 2
+    failureThreshold: 30
+  readiness:
+    enabled: true
+    httpGet:
+      path: /
+      port: http
+    periodSeconds: 5
+    timeoutSeconds: 2
+    successThreshold: 1
+    failureThreshold: 3
+  liveness:
+    enabled: true
+    httpGet:
+      path: /
+      port: http
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+# A preStop hook buys time for endpoint removal to reach the ingress gateway
+# before the process exits, which is what keeps a rolling update from dropping
+# requests. The default image has no shell, so the sleep handler (Kubernetes
+# >= 1.30) is the portable form; use exec for older clusters with a shell.
+lifecycle: {}
+#  preStop:
+#    sleep:
+#      seconds: 5
+
+# readOnlyRootFilesystem means anything that writes needs a volume. /tmp is
+# mounted by default because it is the common case.
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+
+# -----------------------------------------------------------------------------
+# Scheduling
+#
+# The zone constraint is what makes this genuinely multi-AZ: DoNotSchedule
+# leaves a pod Pending rather than letting every replica land in one AZ.
+# matchLabelKeys scopes the skew calculation to the ReplicaSet being rolled
+# out, so a rollout is not blocked by pods of the previous revision.
+#
+# Relax the zone constraint to ScheduleAnyway if the node groups are not spread
+# evenly enough to satisfy it — otherwise capacity in one AZ caps the whole
+# deployment. A labelSelector is injected per constraint when not given.
+# -----------------------------------------------------------------------------
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    matchLabelKeys:
+      - pod-template-hash
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    matchLabelKeys:
+      - pod-template-hash
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# -----------------------------------------------------------------------------
+# Service
+# -----------------------------------------------------------------------------
+
+service:
+  enabled: true
+  # ClusterIP is the right type behind an Istio gateway: the gateway is the only
+  # thing that needs to reach it, and exposure is the VirtualService's job.
+  type: ClusterIP
+  annotations: {}
+  labels: {}
+  clusterIP: ""
+  sessionAffinity: None
+  sessionAffinityConfig: {}
+  publishNotReadyAddresses: false
+  internalTrafficPolicy: ""
+  # Only rendered for NodePort / LoadBalancer.
+  externalTrafficPolicy: ""
+  # Only rendered for LoadBalancer.
+  loadBalancerSourceRanges: []
+  ipFamilyPolicy: ""
+  ipFamilies: []
+  # targetPort defaults to the port's own name, which must match a
+  # containerPorts entry. appProtocol is how Istio picks the L7 protocol when
+  # the port name is not itself prefixed http-/grpc-/tcp-.
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+      appProtocol: http
+      # nodePort: 30080
+
+# -----------------------------------------------------------------------------
+# Istio ingress
+#
+# The Gateway is the listener config on the shared ingress gateway deployment;
+# the VirtualService is the route from a hostname to this Service. Both are
+# needed to expose the app, and both live in the app's namespace so the app
+# owns its own routing rather than editing a cluster-wide object.
+# -----------------------------------------------------------------------------
+
+istio:
+  # networking.istio.io/v1 for Istio >= 1.22, v1beta1 below that.
+  apiVersion: networking.istio.io/v1
+
+  # Pod-level sidecar opt-in. Empty leaves the decision to the namespace's
+  # injection label, which is the usual arrangement. "true"/"false" forces it
+  # per workload; revision targets a specific control plane or revision tag.
+  sidecarInject: ""
+  revision: ""
+
+  # Hostnames this service answers on, shared by the Gateway and the
+  # VirtualService. Either list them here, or leave empty and set `domain` to
+  # have them derived as "<prefix>.<domain>".
+  hosts:
+    - hello-world.example.com
+  domain: ""
+  # Defaults to the release's full name when domain is set and this is empty.
+  hostPrefixes: []
+
+  gateway:
+    enabled: true
+    # Defaults to "<fullname>-gateway".
+    name: ""
+    annotations: {}
+    labels: {}
+    # Must match the labels on the ingress gateway deployment to bind to it.
+    selector:
+      istio: ingressgateway
+    # Passed through verbatim; `hosts` is filled from istio.hosts when a server
+    # omits it. Plain HTTP assumes TLS is already terminated upstream
+    # (ALB/NLB). To terminate at the gateway instead, add the HTTPS server
+    # below with a credentialName naming a secret in the gateway's namespace,
+    # and set tls.httpsRedirect on the port 80 server.
+    servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+      # - port:
+      #     number: 443
+      #     name: https
+      #     protocol: HTTPS
+      #   tls:
+      #     mode: SIMPLE
+      #     credentialName: app-tls
+
+  virtualService:
+    enabled: true
+    # Defaults to the release's full name.
+    name: ""
+    annotations: {}
+    labels: {}
+    # Defaults to istio.hosts.
+    hosts: []
+    # Defaults to this chart's Gateway (namespace-qualified), plus "mesh" when
+    # includeMesh is set. Set explicitly to attach to a pre-existing Gateway.
+    gateways: []
+    # "mesh" serves the same hostnames to in-cluster callers, so clients do not
+    # need a different address than external ones.
+    includeMesh: true
+    exportTo: []
+
+    # Full control: a raw list of HTTPRoute entries. When set, everything under
+    # `route` below is ignored — use it for traffic splitting, mirroring, fault
+    # injection or several match blocks.
+    http: []
+
+    # Single-route convenience path, used when `http` is empty.
+    route:
+      # uri match: prefix | exact | regex.
+      matchType: prefix
+      match: /
+      # Rewrite the path before forwarding, e.g. to strip a routing prefix.
+      rewriteUri: ""
+      # Destination port. Empty resolves to the Service port named portName.
+      port: ""
+      portName: http
+      # An outer bound on a request. Istio's own default is no timeout at all.
+      timeout: 15s
+      # These conditions only fire where the request provably did not reach the
+      # app, so retrying is safe even for non-idempotent handlers. Adding 5xx
+      # or retriable-status-codes here would not be.
+      retries:
+        attempts: 3
+        perTryTimeout: 3s
+        retryOn: connect-failure,refused-stream,gateway-error
+      corsPolicy: {}
+      headers: {}
+
+# -----------------------------------------------------------------------------
+# Metrics
+#
+# Off by default: a ServiceMonitor is only useful once the app actually serves
+# Prometheus metrics, and a scrape target that 404s is worse than none. The
+# default labels are what the platform's Prometheus selects ServiceMonitors on.
+# -----------------------------------------------------------------------------
+
+metrics:
+  serviceMonitor:
+    enabled: false
+    # Defaults to the release namespace.
+    namespace: ""
+    labels:
+      prometheus: prometheus-kube-prometheus-prometheus
+      release: prometheus
+    # Passed through verbatim. `port` names a Service port.
+    endpoints:
+      - port: http
+        path: /metrics
+        interval: 30s
+        scrapeTimeout: 10s

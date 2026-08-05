@@ -1,0 +1,8 @@
+# Internal-only service: no Gateway, routed to from inside the mesh only.
+istio:
+  hosts:
+    - internal.svc.ci.example.net
+  gateway:
+    enabled: false
+  virtualService:
+    includeMesh: true
