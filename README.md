@@ -14,6 +14,7 @@ terraform/
   aws/            EKS cluster, node groups, IAM roles          → terraform/aws/README.md
   kubernetes/     load balancer controller, istio, monitoring,
                   logging, tracing, and the application release → terraform/kubernetes/README.md
+terragrunt/       runs both stacks in order, state and handover → terragrunt/README.md
 helm-chart/       the microservice chart                        → helm-chart/README.md
 pipeline/         GitHub Actions deploy, tag rollout only       → pipeline/README.md
 .github/workflows/  the trigger for it
@@ -24,6 +25,11 @@ Kubernetes providers need a cluster endpoint that does not exist until the first
 stack has finished, and Terraform cannot configure a provider from a value that
 is unknown at plan time. [terraform/README.md](terraform/README.md) covers the
 split and how values move between them.
+
+There are two ways to run them: plain Terraform, one stack at a time with a
+`jq` step in between, or [terragrunt](terragrunt/README.md), which orders the
+two, configures remote state for both, and passes the first stack's outputs to
+the second automatically. Both paths run the same Terraform.
 
 ## What gets built
 
@@ -52,6 +58,21 @@ split and how values move between them.
 - KMS key for encryption of resources
 
 ## Quickstart
+
+### With terragrunt
+
+One file to fill in, both stacks in order, no handover step:
+
+```bash
+cd terragrunt
+$EDITOR common.hcl                      # state bucket, VPC, subnets, domain, cert, SGs
+terragrunt run-all apply
+```
+
+The state bucket and lock table named in `common.hcl` have to exist first —
+nothing here creates them. See [terragrunt/README.md](terragrunt/README.md).
+
+### With plain Terraform
 
 ```bash
 # 1. Cluster, node groups, IAM
@@ -87,8 +108,15 @@ provider from the cluster's own attributes. Terraform evaluates provider
 configuration before it knows those values, and a `terraform destroy` would pull
 the provider config out from under the resources that depend on it. The cost is a
 handover step between applies; the mitigation is naming every output after the
-variable it feeds, so the handover is one `jq` line and can be automated with
-Terragrunt, `terraform_remote_state`, or a CI artifact.
+variable it feeds, so the handover is one `jq` line — or, under
+[terragrunt](terragrunt/README.md), `merge(dependency.aws.outputs, …)`.
+
+**Terragrunt wraps the stacks rather than replacing them.** The Terraform roots
+stay runnable on their own, so nothing in `terraform/` assumes a wrapper. What
+terragrunt adds is the part that is otherwise manual and easy to get wrong:
+backend configuration in one place, the output-to-input handover, prerequisites
+entered once instead of in two `.tfvars` files, and an execution order that comes
+from a dependency graph rather than from remembering it.
 
 **The VPC is an input.** The scope is the cluster. Accepting `vpc_id` and subnet
 IDs keeps the stack usable in an account where the network is owned by someone
@@ -124,6 +152,11 @@ tracing integration. The cost is that a domain, a certificate and pre-existing
 security groups become prerequisites — heavier than a Hello World strictly needs.
 
 ## Known limitations
+
+The structural ones — why the stacks are split, what a single bulk state costs,
+and the module-per-unit architecture this would grow into — are written up in
+[Limitations.md](Limitations.md). What follows is the concrete list of what is
+unfinished or knowingly left open in the code.
 
 - **Controllers run on node-role permissions, not IRSA.** The load balancer
   controller and both CSI drivers take credentials from the node instance
@@ -161,6 +194,13 @@ security groups become prerequisites — heavier than a Hello World strictly nee
   helm 2.x means rewriting every `set {}` block as a list.
 - **`modules/jaeger` hardcodes a manifest count.** Changing `istio_version` needs
   that count checked against the upstream file.
+- **Terragrunt covers one environment.** [common.hcl](terragrunt/common.hcl) holds
+  a single set of values; a second environment means a directory per environment.
+  State locking there still uses a DynamoDB table rather than S3-native
+  `use_lockfile`.
+- **Each stack is still one state.** Terragrunt wraps the two existing roots, so
+  the granularity is per stack, not per module — changing a security group still
+  refreshes everything in the `aws` state. See [Limitations.md](Limitations.md).
 
 ## Where the assignment requirements live
 

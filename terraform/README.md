@@ -48,10 +48,14 @@ keeping the handover a single line.
 
 ### Automating it
 
+**[../terragrunt](../terragrunt/README.md) implements this.** Its `kubernetes`
+unit is `inputs = merge(dependency.aws.outputs, {…})` — one line, precisely
+because the names match — and `run-all apply` orders the two stacks from the
+dependency graph. The alternatives, for the record:
+
 | Approach | Trade-off |
 | --- | --- |
 | `terraform output -json` → `.auto.tfvars.json` | What the commands above do. No extra tooling, no state coupling, but the ordering is on you |
-| Terragrunt `dependency` blocks | `inputs = merge(dependency.aws.outputs, {…})` is one line precisely because the names match, and `run-all apply` orders the stacks. Needs the extra binary |
 | `terraform_remote_state` | No new tooling, but the second stack gets read access to the whole first state file, and each value is mapped by hand |
 | `data "aws_eks_cluster"` | Endpoint, CA and OIDC straight from the API, so only `cluster_name` and `region` need passing. Costs an API call per plan |
 | SSM Parameter Store | Most decoupled, works cross-account and for non-Terraform consumers. Most glue |
@@ -61,11 +65,16 @@ Not worth it: collapsing both into one root, for the reasons above.
 
 ## State
 
-Both stacks keep state on disk, so a local run needs nothing but AWS
-credentials. The S3 backend is commented out in [aws/backend.tf](aws/backend.tf)
-and [kubernetes/backend.tf](kubernetes/backend.tf) — fill in the bucket and
-uncomment when the stacks move to shared state. Both have to be remote before
-`terraform_remote_state` can read one from the other.
+Run directly, both stacks keep state on disk, so a local run needs nothing but
+AWS credentials. The S3 backend is commented out in
+[aws/backend.tf](aws/backend.tf) and [kubernetes/backend.tf](kubernetes/backend.tf)
+— fill in the bucket and uncomment when the stacks move to shared state. Both
+have to be remote before `terraform_remote_state` can read one from the other.
+
+Run through [../terragrunt](../terragrunt/README.md), state is remote from the
+start: `root.hcl` generates a `backend.tf` into each unit's copy of the source,
+with a key per stack. The commented-out files here are left untouched, so the
+direct path still works.
 
 ## Conventions
 

@@ -9,9 +9,15 @@ locals {
   common = read_terragrunt_config(find_in_parent_folders("common.hcl"))
 }
 
-# terraform/aws/backend.tf is a commented-out stub and the kubernetes stack has
-# no backend file at all, so the block is generated here instead. That keeps the
-# state layout in one place and gives each unit its own key.
+# Both stacks ship a commented-out backend.tf, so the real block is generated
+# here and written into each unit's working copy. That keeps the state layout in
+# one place and gives every unit its own key under one bucket.
+#
+# The bucket and the lock table are created on the first run if they do not
+# already exist: terragrunt does that itself, enabling versioning, server-side
+# encryption, public access blocking and enforced TLS on anything it creates. The
+# skip_bucket_* keys would opt out of those, so none are set here. Interactive
+# runs prompt before creating; pass --terragrunt-non-interactive in CI.
 remote_state {
   backend = "s3"
 
@@ -29,6 +35,11 @@ remote_state {
     region         = local.common.locals.state_region
     encrypt        = true
     dynamodb_table = local.common.locals.state_lock_table
+
+    # Applied only to resources terragrunt creates itself.
+    s3_bucket_tags                 = local.common.locals.tags
+    dynamodb_table_tags            = local.common.locals.tags
+    enable_lock_table_ssencryption = true
   }
 }
 

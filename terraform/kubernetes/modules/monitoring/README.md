@@ -13,7 +13,7 @@ plus the routing that publishes their UIs through the mesh.
 | `monitoring-gateway` `Gateway` | Listener for the Grafana, Prometheus and Alertmanager hostnames |
 | `VirtualService`s | One per UI, split out of [configs/virtualServices.yaml](configs/virtualServices.yaml) and applied individually so a change to one does not replace all three |
 | [modules/grafana-config](modules/grafana-config) | Folder, dashboards, a developer user and the CloudWatch datasource, over Grafana's HTTP API |
-| `node-exporter`, `kube-state-metrics` releases | **Both `count = 0`** — kube-prometheus-stack already ships them. Kept for the case where they need to be run separately |
+| `kube-state-metrics` release | **`count = 0`** — kube-prometheus-stack already ships it. Kept for the case where it needs to be run separately |
 
 ## Configuration
 
@@ -24,7 +24,8 @@ plus the routing that publishes their UIs through the mesh.
 | `config.yaml` | The values file itself — Prometheus retention (90d), storage, the ServiceMonitor selector, Grafana persistence, extra scrape configs |
 | `alerts.yaml` | `additionalPrometheusRulesMap`, from `var.required_alerts` merged with `var.custom_alerts` |
 | `alertmanager.yaml` | Receivers — Slack, PagerDuty, and an SNS topic for Google Chat |
-| `nodeExporter.yaml`, `kubeStateMetrics.yaml` | Only used by the two disabled releases |
+| `kubeStateMetrics.yaml` | Only used by the disabled release above |
+| `nodeExporter.yaml` | Orphaned — the release that consumed it has been removed |
 
 `var.required_alerts` holds nine rules covering pods down, OOM kills, volume and
 node disk pressure, inode exhaustion, CPU, memory and swap. Anything passed as
@@ -87,12 +88,15 @@ Requires the `kubectl.this` provider alias.
   `efs_depends_on` / `ebs_depends_on` input is what orders the release after the
   StorageClass.
 - **The two `additionalScrapeConfigs` in `config.yaml` are vestigial.** One keeps
-  endpoints named `node-exporter-prometheus-node-exporter`, which is the disabled
-  standalone release; the other targets
+  endpoints named `node-exporter-prometheus-node-exporter` — a release that no
+  longer exists in this module at all; the other targets
   `kube-state-metrics.kube-system.svc.cluster.local:8080`, while
   kube-prometheus-stack installs kube-state-metrics into its own release namespace.
   Neither resolves to anything — the chart's own ServiceMonitors are what actually
   scrape both components.
+- **`node_exporter_version` is a dead input.** It is declared at the root, passed
+  down through `main.tf`, declared again here, and consumed by nothing since the
+  node-exporter release was removed. `nodeExporter.yaml` is orphaned with it.
 - **`retention: 90d` with no `retentionSize`.** The volume is sized by
   `prometheus_volume_size` (50Gi at the root) — if 90 days of series exceed it,
   Prometheus fills the disk rather than dropping old data.

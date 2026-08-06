@@ -34,6 +34,10 @@ terraform init
 terraform apply -var-file=dev.tfvars
 ```
 
+Or through [../../terragrunt](../../terragrunt/README.md), which supplies the
+`aws` stack's outputs from its dependency graph instead of a `.auto.tfvars.json`
+file.
+
 ## Reaching a private cluster
 
 `endpoint_public_access` defaults to `false` in the `aws` stack, so the API
@@ -92,6 +96,7 @@ Full descriptions are in [vars.tf](vars.tf).
 | `deploy_app` | `true` | Installs the chart from `../../helm-chart` and publishes its hostname |
 | `app_replica_count` | `1` | Three is the smallest count that survives losing a zone with two left serving |
 | `app_values` | `{}` | Merged over the wiring in `main.tf`, so anything in the chart's `values.yaml` is reachable |
+| `helm_chart_path` | `null` | Falls back to `../../helm-chart`, relative to this module. Set it when Terraform runs from a copied source tree — [terragrunt](../../terragrunt/README.md) does, and passes an absolute path |
 | `create_opensearch` | `false` | Adds the Filebeat shipper and the Kibana route |
 | `istio_version` | `v1.30.3` | Must carry the leading `v` — the Sail `Istio` resource requires that form |
 | `lbc_addon_version` | `3.5.0` | Load balancer controller chart |
